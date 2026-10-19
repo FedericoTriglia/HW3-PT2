@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Homework 2 - ECC & Caesar Cipher Suite</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 900px; width: 100%; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 20px; }
+        h1 { color: #38bdf8; font-size: 24px; margin-top: 0; }
+        h2 { color: #38bdf8; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        label { display: block; font-size: 14px; margin-bottom: 5px; color: #94a3b8; }
+        input, textarea, select { width: 100%; padding: 8px; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 6px; box-sizing: border-box; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; grid-column: 1 / -1; }
+        button:hover { background: #0369a1; }
+        .output { background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #475569; margin-top: 15px; font-family: monospace; white-space: pre-wrap; word-break: break-all; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Homework 2: ECC Toy Scheme & Caesar Cipher Suite</h1>
+    
+    <!-- ECC Section -->
+    <h2>1. ECC Encryption (Toy secp256k1 mod 17)</h2>
+    <div class="controls">
+        <div>
+            <label for="eccMsg">Message (Single character):</label>
+            <input type="text" id="eccMsg" value="A" maxlength="1">
+        </div>
+        <div>
+            <label for="eccKey">Private Key (d):</label>
+            <input type="number" id="eccKey" value="6" min="1" max="15">
+        </div>
+        <button onclick="runECCSimulation()">Run ECC Encryption/Decryption</button>
+    </div>
+    <div id="eccOutput" class="output">ECC results waiting for execution...</div>
+
+    <!-- Caesar Section -->
+    <h2 style="margin-top: 30px;">2. Caesar Cipher & Statistical Cryptanalysis</h2>
+    <div class="controls">
+        <div>
+            <label for="caesarText">Plaintext:</label>
+            <input type="text" id="caesarText" value="asymmetric and symmetric cryptography">
+        </div>
+        <div>
+            <label for="caesarShift">Key (Shift):</label>
+            <input type="number" id="caesarShift" value="3" min="1" max="25">
+        </div>
+        <button onclick="runCaesarSimulation()">Run Encryption and Statistical Attack</button>
+    </div>
+    <div id="caesarOutput" class="output">Caesar results waiting for execution...</div>
+    <h2 style="margin-top: 30px;">3. Attack on the ECC Toy Scheme (Brute Force / DLP)</h2>
+    <div class="controls">
+        <div>
+            <label for="attackQx">Public Key Q (x):</label>
+            <input type="number" id="attackQx" value="6">
+        </div>
+        <div>
+            <label for="attackQy">Public Key Q (y):</label>
+            <input type="number" id="attackQy" value="6">
+        </div>
+        <button onclick="runECCAttack()">Run Brute Force Attack on ECC</button>
+    </div>
+    <div id="eccAttackOutput" class="output">ECC attack results waiting for execution...</div>
+</div>
+
+<script>
+// Toy Elliptic Curve Parameters (Homework 1)
+const p = 17, a = 0, b = 7;
+const G = [1, 5];
+
+function mod(n, m) { return ((n % m) + m) % m; }
+function modInverse(a, m) {
+    a = mod(a, m);
+    for (let x = 1; x < m; x++) { if (mod(a * x, m) === 1) return x; }
+    return 1;
+}
+
+function pointAdd(P, Q) {
+    if (!P) return Q;
+    if (!Q) return P;
+    let [x1, y1] = P, [x2, y2] = Q;
+    if (x1 === x2 && mod(y1 + y2, p) === 0) return null;
+    let s;
+    if (x1 === x2 && y1 === y2) {
+        if (y1 === 0) return null;
+        s = mod(mod(3 * x1 * x1 + a, p) * modInverse(2 * y1, p), p);
+    } else {
+        s = mod(mod(y2 - y1, p) * modInverse(x2 - x1, p), p);
+    }
+    let x3 = mod(s * s - x1 - x2, p);
+    let y3 = mod(s * (x1 - x3) - y1, p);
+    return [x3, y3];
+}
+
+function scalarMultiply(k, Pt) {
+    let result = null, addend = Pt;
+    while (k > 0) {
+        if (k & 1) result = pointAdd(result, addend);
+        addend = pointAdd(addend, addend);
+        k >>= 1;
+    }
+    return result;
+}
+
+// Table of valid points on y^2 = x^3 + 7 mod 17
+const validPoints = [
+    [1,5], [1,12], [2,8], [2,9], [3,0], [6,6], [6,11], [7,3],
+    [7,14], [8,5], [8,12], [11,7], [11,10], [12,6], [12,11]
+];
+
+function charToPoint(c) {
+    let idx = c.charCodeAt(0) % validPoints.length;
+    return validPoints[idx];
+}
+
+function runECCSimulation() {
+    let char = document.getElementById('eccMsg').value || 'A';
+    let d = parseInt(document.getElementById('eccKey').value);
+    
+    // 1. Key Generation
+    let Q = scalarMultiply(d, G);
+    
+    // 2. Encryption (ElGamal EC style)
+    let M = charToPoint(char);
+    let r = Math.floor(Math.random() * 14) + 1; // ephemeral key
+    let C1 = scalarMultiply(r, G);
+    let rQ = scalarMultiply(r, Q);
+    let C2 = pointAdd(M, rQ);
+    
+    // 3. Decryption: M = C2 - d*C1
+    let dC1 = scalarMultiply(d, C1);
+    let minusdC1 = [dC1[0], mod(-dC1[1], p)];
+    let decryptedM = pointAdd(C2, minusdC1);
+    
+    let out = `Original message: '${char}'\n`;
+    out += `Message point M: (${M[0]}, ${M[1]})\n`;
+    out += `Private key (d): ${d}\n`;
+    out += `Public key (Q = dG): (${Q[0]}, ${Q[1]})\n`;
+    out += `Ephemeral key (r): ${r}\n`;
+    out += `Ciphertext (C1, C2): C1=(${C1[0]}, ${C1[1]}), C2=(${C2[0]}, ${C2[1]})\n`;
+    out += `Decrypted point M': (${decryptedM ? decryptedM[0] : 'Inf'}, ${decryptedM ? decryptedM[1] : 'Inf'})\n`;
+    
+    document.getElementById('eccOutput').textContent = out;
+}
+
+// Caesar Cipher
+function caesarEncrypt(text, shift) {
+    return text.split('').map(char => {
+        let code = char.charCodeAt(0);
+        if (code >= 97 && code <= 122) return String.fromCharCode(((code - 97 + shift) % 26) + 97);
+        if (code >= 65 && code <= 90) return String.fromCharCode(((code - 65 + shift) % 26) + 65);
+        return char;
+    }).join('');
+}
+
+// Statistical Cryptanalysis (Chi-squared for English)
+const englishFreq = {
+    'a': 8.167, 'b': 1.492, 'c': 2.782, 'd': 4.253, 'e': 12.702, 'f': 2.228,
+    'g': 2.015, 'h': 6.094, 'i': 6.966, 'j': 0.153, 'k': 0.772, 'l': 4.025,
+    'm': 2.406, 'n': 6.749, 'o': 7.507, 'p': 1.929, 'q': 0.095, 'r': 5.987,
+    's': 6.327, 't': 9.056, 'u': 2.758, 'v': 0.978, 'w': 2.360, 'x': 0.150,
+    'y': 1.974, 'z': 0.074
+};
+
+function breakCaesar(ciphertext) {
+    let bestShift = 0, minChi2 = Infinity;
+    for (let shift = 0; shift < 26; shift++) {
+        let decrypted = caesarDecrypt(ciphertext, 26 - shift).toLowerCase();
+        let counts = {};
+        let total = 0;
+        for (let c of decrypted) {
+            if (c >= 'a' && c <= 'z') { counts[c] = (counts[c] || 0) + 1; total++; }
+        }
+        let chi2 = 0;
+        if (total > 0) {
+            for (let char in englishFreq) {
+                let exp = (englishFreq[char] / 100) * total;
+                let obs = counts[char] || 0;
+                chi2 += Math.pow(obs - exp, 2) / (exp || 1);
+            }
+        }
+        if (chi2 < minChi2) { minChi2 = chi2; bestShift = shift; }
+    }
+    return { bestShift, decrypted: caesarDecrypt(ciphertext, 26 - bestShift) };
+}
+
+function runCaesarSimulation() {
+    let text = document.getElementById('caesarText').value;
+    let shift = parseInt(document.getElementById('caesarShift').value);
+    
+    let ciphertext = caesarEncrypt(text, shift);
+    let attack = breakCaesar(ciphertext);
+    
+    let out = `Plaintext: ${text}\n`;
+    out += `Applied shift: ${shift}\n`;
+    out += `Ciphertext:    ${ciphertext}\n`;
+    out += `----------------------------------------\n`;
+    out += `Recovered key (Statistical Attack): ${attack.bestShift}\n`;
+    out += `Decrypted text: ${attack.decrypted}\n`;
+    
+    document.getElementById('caesarOutput').textContent = out;
+}
+
+function breakToyECC(targetQ) {
+    let G = [1, 5];
+    let current = null;
+    
+    for (let d = 1; d <= 16; d++) {
+        current = pointAdd(current, G);
+        if (current && current[0] === targetQ[0] && current[1] === targetQ[1]) {
+            return d;
+        }
+    }
+    return null;
+}
+
+function runECCAttack() {
+    let qx = parseInt(document.getElementById('attackQx').value);
+    let qy = parseInt(document.getElementById('attackQy').value);
+    let targetQ = [qx, qy];
+    
+    let startTime = performance.now();
+    let recoveredKey = breakToyECC(targetQ);
+    let endTime = performance.now();
+    
+    let out = `Target public key Q: (${qx}, ${qy})\n`;
+    if (recoveredKey !== null) {
+        out += `[SUCCESS] Private key (d) recovered: ${recoveredKey}\n`;
+        out += `Execution time: ${(endTime - startTime).toFixed(4)} ms\n`;
+        out += `Verification: ${recoveredKey} * G = (${scalarMultiply(recoveredKey, [1,5]).join(', ')})`;
+    } else {
+        out += `[FAILURE] No key found for the specified point (invalid point or outside the subgroup).\n`;
+    }
+    
+    document.getElementById('eccAttackOutput').textContent = out;
+}
+
+runECCSimulation();
+runCaesarSimulation();
+</script>
+
+</body>
+</html>
