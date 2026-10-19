@@ -155,6 +155,10 @@ function caesarEncrypt(text, shift) {
     }).join('');
 }
 
+function caesarDecrypt(text, shift) {
+    return caesarEncrypt(text, 26 - shift);
+}
+
 // Statistical Cryptanalysis (Chi-squared for English)
 const englishFreq = {
     'a': 8.167, 'b': 1.492, 'c': 2.782, 'd': 4.253, 'e': 12.702, 'f': 2.228,
